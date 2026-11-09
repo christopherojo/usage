@@ -3,6 +3,8 @@
 // - Fetches usage + conversation JSON from chatgpt.com using the page's own session
 // - Forwards normalized records to background.js for storage / tokenizing
 (() => {
+  if (window.__usageMeterContent) return;
+  window.__usageMeterContent = true;
   const SRC = "chatgpt-usage-meter";
   const USAGE_PATH = "/backend-api/wham/usage";
   const POLL_MS = 5 * 60 * 1000;

@@ -323,7 +323,7 @@ for (const th of $("chat-table").querySelectorAll("th")) {
     renderChats();
   });
 }
-$("settings").addEventListener("click", (e) => (e.preventDefault(), chrome.runtime.openOptionsPage()));
+$("settings").addEventListener("click", (e) => (e.preventDefault(), UsageShared.openSettings()));
 let rt;
 window.addEventListener("resize", () => (clearTimeout(rt), (rt = setTimeout(renderChart, 100))));
 chrome.storage.onChanged.addListener((c, area) => {

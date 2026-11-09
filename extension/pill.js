@@ -64,8 +64,19 @@
     return n;
   }
 
+  // After an extension reload, this copy is orphaned: chrome.runtime.id disappears.
+  const alive = () => {
+    try {
+      return !!chrome.runtime.id;
+    } catch (_) {
+      return false;
+    }
+  };
+
   function mount() {
     if (host && host.isConnected) return;
+    // Remove pills left behind by a previous (reloaded) copy of the extension.
+    document.querySelectorAll("chatgpt-usage-pill").forEach((n) => n.remove());
     host = document.createElement("chatgpt-usage-pill");
     root = host.attachShadow({ mode: "closed" });
     root.append(h("style", { text: CSS }));
@@ -127,6 +138,11 @@
   }
 
   function render() {
+    if (!alive()) {
+      if (host) host.remove();
+      clearInterval(tick);
+      return;
+    }
     if (!prefs.pill.enabled || dismissed || !latest || !latest.windows || !latest.windows.length) {
       if (host) host.remove();
       return;
@@ -196,7 +212,7 @@
     if (expanded && host && !e.composedPath().includes(host)) (expanded = false), render();
   });
   // Keep countdowns fresh and survive the page re-rendering <html>.
-  setInterval(() => {
+  const tick = setInterval(() => {
     if (prefs.pill.enabled && !dismissed && latest) render();
   }, 30000);
 

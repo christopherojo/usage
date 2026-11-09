@@ -1,8 +1,13 @@
 // Shared settings + colour levels. Loaded by background (importScripts), content scripts,
 // popup, dashboard and options pages. Exposes self.UsageShared.
 (function (root) {
+  // Bump on every change. Pages read this file fresh from disk; the background keeps whatever
+  // was loaded at the last extension reload, so a mismatch means "reload the extension".
+  const BUILD = "0.3.2";
+
   const DEFAULT_PREFS = {
     view: "used", // "used" | "left"
+    badgeWindow: "tightest", // toolbar icon/number: tightest | <window key> e.g. "5-hour", "Weekly"
     thresholds: { caution: 50, warn: 25, critical: 10 }, // colour levels by % LEFT
     pollMinutes: 5,
     pill: {
@@ -99,6 +104,23 @@
     return [...map.values()].sort((a, b) => b.tokens - a.tokens);
   }
 
+  // Open (or focus) the settings tab ourselves. chrome.runtime.openOptionsPage() can throw
+  // "Could not create an options page" (e.g. when the loaded manifest is stale), so avoid it.
+  async function openSettings() {
+    const url = chrome.runtime.getURL("options/options.html");
+    try {
+      const [existing] = await chrome.tabs.query({ url });
+      if (existing) {
+        await chrome.tabs.update(existing.id, { active: true });
+        await chrome.windows.update(existing.windowId, { focused: true });
+        return;
+      }
+    } catch (_) {}
+    await chrome.tabs.create({ url });
+  }
+
   root.UsageShared = {
+    BUILD,
+    openSettings,
     aggregateConversations, DEFAULT_PREFS, LEVEL_COLORS, LEVEL_TEXT, mergePrefs, levelFor, loadPrefs, pickWindow, fmtDur, fmtTime, fmtNum };
 })(typeof self !== "undefined" ? self : globalThis);

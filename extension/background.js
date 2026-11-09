@@ -99,8 +99,8 @@ async function updateBadge(snap) {
   }
   const prefs = await UsageShared.loadPrefs();
   const showLeft = prefs.view === "left";
-  // Badge tracks whichever window is closest to running out.
-  const tight = UsageShared.pickWindow(wins, "tightest");
+  // Badge tracks the window chosen in Settings (default: whichever is closest to running out).
+  const tight = UsageShared.pickWindow(wins, prefs.badgeWindow);
   const used = Math.max(0, Math.min(100, tight.usedPercent));
   const left = 100 - used;
   const shown = showLeft ? left : used;
@@ -184,11 +184,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case "query":
       serial(() => saveQuery(msg.record, msg.texts));
       break;
+    case "get-build":
+      sendResponse({ build: UsageShared.BUILD });
+      return;
     case "open-dashboard":
       chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/dashboard.html") });
       break;
     case "open-settings":
-      chrome.runtime.openOptionsPage();
+      UsageShared.openSettings();
       break;
     case "clear-data":
       serial(async () => {
@@ -200,6 +203,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: true });
       });
       return true;
+  }
+});
+
+// After install/reload, attach to chatgpt.com tabs that are already open (no page reload, so drafts survive).
+chrome.runtime.onInstalled.addListener(async () => {
+  const tabs = await chrome.tabs.query({ url: "https://chatgpt.com/*" });
+  for (const t of tabs) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: t.id }, world: "MAIN", files: ["inject.js"] });
+      await chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["lib/shared.js", "lib/forecast.js", "content.js", "pill.js"] });
+    } catch (e) {
+      console.warn("[usage-meter] could not attach to tab", t.id, e);
+    }
   }
 });
 

@@ -76,7 +76,12 @@ function sparkline(points, { t0, t1, now = Date.now(), project = null }) {
 function forecastLine(w, f, showLeft) {
   const used = w.usedPercent;
   const rate = f.ratePerHour != null ? `${f.ratePerHour < 1 ? f.ratePerHour.toFixed(2) : f.ratePerHour.toFixed(1)}%/h` : "";
-  const basis = f.basis === "recent" ? `recent pace (last ${fmtDur(f.lookbackMs)})` : "average pace this window";
+  const basis =
+    f.basis === "recent"
+      ? `recent pace (last ${fmtDur(f.lookbackMs)})`
+      : f.basis === "blend"
+        ? `recent pace blended with this window's average (history doesn't cover the last ${fmtDur(f.lookbackMs)} yet)`
+        : "average pace this window";
   const tip = rate ? `Burn rate ${rate}, based on ${basis}` : "";
   const pace =
     f.evenPaceUsed == null ? "" : used > f.evenPaceUsed + 5 ? " · ahead of even pace" : used < f.evenPaceUsed - 5 ? " · under even pace" : " · on even pace";
@@ -481,7 +486,7 @@ $("refresh").addEventListener("click", refresh);
 const openDashboard = (hash = "") => chrome.tabs.create({ url: chrome.runtime.getURL(`dashboard/dashboard.html${hash}`) });
 $("open-dashboard").addEventListener("click", () => openDashboard());
 $("all-chats").addEventListener("click", (e) => (e.preventDefault(), openDashboard("#chats")));
-$("open-settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
+$("open-settings").addEventListener("click", () => UsageShared.openSettings());
 for (const b of document.querySelectorAll("#view-toggle button")) b.addEventListener("click", () => setView(b.dataset.view));
 $("copy-diag").addEventListener("click", async () => {
   const { diag = {}, usageError, latestUsage, queries = [] } = await chrome.storage.local.get(["diag", "usageError", "latestUsage", "queries"]);
@@ -509,4 +514,19 @@ chrome.storage.onChanged.addListener((_c, area) => area === "local" && render())
 
 setInterval(paintUpdated, 15000);
 $("version").textContent = `v${chrome.runtime.getManifest().version}`;
+// Background still on old code? (Chrome only swaps it on an extension reload.)
+chrome.runtime
+  .sendMessage({ type: "get-build" })
+  .then((r) => {
+    const running = r && r.build;
+    const files = UsageShared.BUILD;
+    const manifest = chrome.runtime.getManifest().version;
+    if (running !== files || manifest !== files) {
+      $("stale").hidden = false;
+      $("version").textContent = `files v${files} · running v${running || "old"}`;
+    }
+  })
+  .catch(() => ($("stale").hidden = false));
+// Reloading closes this popup; the new background re-attaches to open chatgpt.com tabs itself.
+$("reload-ext").addEventListener("click", () => chrome.runtime.reload());
 render().then(refresh);

@@ -11,7 +11,7 @@
    * @param {number} latestTs timestamp of the snapshot `w` came from
    * @returns {{
    *   ratePerHour: number|null,   // % of the limit used per hour at the chosen pace
-   *   basis: "recent"|"window"|null,
+   *   basis: "recent"|"blend"|"window"|null,
    *   lookbackMs: number|null,
    *   runOutAt: number|null,      // ms timestamp when you'd hit 100%, if before reset
    *   projectedAtReset: number|null,
@@ -60,19 +60,29 @@
 
     let rate = null;
     let basis = null;
+    const windowRate =
+      windowStart && now - windowStart >= 10 * MIN ? (used / (now - windowStart)) * HOUR : null;
     if (dt >= 15 * MIN) {
       rate = ((end.v - startPt.v) / dt) * HOUR;
       basis = "recent";
+      // Only part of the lookback has data (e.g. just installed, or weekly window): blend toward the
+      // window-so-far average so one busy session doesn't get projected across nights and weekends.
+      const needed = windowStart ? Math.min(lookback, Math.max(1, now - windowStart)) : lookback;
+      const coverage = Math.min(1, dt / needed);
+      if (coverage < 0.98 && windowRate !== null) {
+        rate = coverage * rate + (1 - coverage) * windowRate;
+        basis = "blend";
+      }
     }
     // Fallback: average over the window so far (works on first install, before history builds up).
-    if (rate === null && windowStart && now - windowStart >= 10 * MIN) {
-      rate = (used / (now - windowStart)) * HOUR;
+    if (rate === null && windowRate !== null) {
+      rate = windowRate;
       basis = "window";
     }
 
     if (rate === null) return { ...base, status: "unknown" };
     rate = Math.max(0, rate);
-    const out = { ...base, ratePerHour: round(rate, 2), basis, lookbackMs: basis === "recent" ? lookback : null };
+    const out = { ...base, ratePerHour: round(rate, 2), basis, lookbackMs: basis === "window" ? null : lookback };
     if (rate < 0.05) {
       return { ...out, status: "idle", projectedAtReset: used };
     }

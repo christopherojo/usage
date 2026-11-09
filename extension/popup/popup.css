@@ -190,3 +190,8 @@ h1 { white-space: nowrap; }
 #updated { font-size: 11px; min-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #updated.refresh-msg.loading::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: currentColor; animation: blink 1s ease-in-out infinite; vertical-align: 1px; }
 @keyframes blink { 50% { opacity: .25; } }
+
+.stale { display: flex; align-items: center; gap: 8px; margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px; font-size: 12px;
+  border: 1px solid var(--warn-lvl); background: color-mix(in srgb, var(--warn-lvl) 12%, var(--panel)); }
+.stale[hidden] { display: none; }
+.stale button { margin-left: auto; white-space: nowrap; border-color: var(--warn-lvl); }

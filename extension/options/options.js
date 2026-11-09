@@ -22,7 +22,22 @@ function renderScale(t) {
   $("scale").replaceChildren(seg("critical", 0, t.critical), seg("warn", t.critical, t.warn), seg("caution", t.warn, t.caution), seg("ok", t.caution, 100));
 }
 
+function windowChoices(latestUsage) {
+  const wins = (latestUsage && latestUsage.windows) || [];
+  const keys = wins.length ? wins.map((w) => [w.key, w.label]) : [["5-hour", "5-hour"], ["Weekly", "Weekly"]];
+  return [["tightest", "Closest to running out"], ...keys];
+}
+
 function render(latestUsage) {
+  $("badge-window").replaceChildren(
+    ...windowChoices(latestUsage).map(([v, t]) => {
+      const b = document.createElement("button");
+      b.dataset.v = v;
+      b.textContent = t;
+      b.setAttribute("aria-pressed", String(prefs.badgeWindow === v));
+      return b;
+    })
+  );
   for (const b of $("view").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.v === prefs.view));
   $("t-caution").value = prefs.thresholds.caution;
   $("t-warn").value = prefs.thresholds.warn;
@@ -71,6 +86,10 @@ function readThresholds(showError) {
     });
     $(id).addEventListener("change", () => readThresholds(true));
   }
+  $("badge-window").addEventListener("click", (e) => {
+    const v = e.target.dataset && e.target.dataset.v;
+    if (v) save({ badgeWindow: v }).then(() => render(latestUsage));
+  });
   $("poll").addEventListener("change", (e) => save({ pollMinutes: Number(e.target.value) }));
   $("pill-enabled").addEventListener("change", (e) => save({ pill: { ...prefs.pill, enabled: e.target.checked } }).then(() => render(latestUsage)));
   $("pill-position").addEventListener("change", (e) => save({ pill: { ...prefs.pill, position: e.target.value, offset: null } }));

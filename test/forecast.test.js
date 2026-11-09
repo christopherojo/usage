@@ -40,7 +40,20 @@ t("weekly window uses a longer lookback", () => {
   const w = { key: "Weekly", usedPercent: 50, windowSeconds: 604800, resetAt: now + 3 * 24 * H };
   const h = [{ ts: now - 30 * H, windows: [{ key: "Weekly", usedPercent: 38 }] }];
   const f = forecastWindow(w, h, now);
-  assert.equal(f.basis, "recent"); assert.ok(Math.abs(f.ratePerHour - 0.4) < 0.01, f.ratePerHour); // 12% / 30h
-  assert.equal(f.status, "on-track"); // 0.4%/h * 72h = 28.8 -> ~79% at reset
+  // 30h of history vs a 33.6h lookback => 89% coverage: blend 0.4%/h recent with 50%/96h window avg
+  const cov = 30 / 33.6, expect = cov * 0.4 + (1 - cov) * (50 / 96);
+  assert.equal(f.basis, "blend"); assert.ok(Math.abs(f.ratePerHour - expect) < 0.01, f.ratePerHour);
+  assert.equal(f.status, "on-track");
+});
+t("one busy session isn't projected across the whole week", () => {
+  // The screenshot case: weekly 63% used, resets in 54h, only ~3h of history at 2.5%/h.
+  const w = { key: "Weekly", usedPercent: 63, windowSeconds: 604800, resetAt: now + 54 * H };
+  const h = [{ ts: now - 3 * H, windows: [{ key: "Weekly", usedPercent: 55.5 }] }];
+  const f = forecastWindow(w, h, now);
+  assert.equal(f.basis, "blend");
+  const windowAvg = 63 / (7 * 24 - 54), cov = 3 / 33.6;
+  assert.ok(Math.abs(f.ratePerHour - (cov * 2.5 + (1 - cov) * windowAvg)) < 0.01, f.ratePerHour);
+  assert.ok(f.ratePerHour < 1, "should be far below the raw 2.5%/h session rate");
+  assert.ok(f.ratePerHour > windowAvg, "but still reflect the busier recent pace");
 });
 console.log(`${n} passed`);
