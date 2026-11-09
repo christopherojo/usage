@@ -43,23 +43,76 @@ async function saveUsage(snapshot) {
 }
 
 
+// ---------- toolbar icon ----------
+// Ring gauge drawn on an OffscreenCanvas. Used mode: the ring FILLS as you use more.
+// Left mode: the ring shows what REMAINS (drains). Colour = level by % left.
+function drawGauge(size, pct, color, mode) {
+  const c = new OffscreenCanvas(size, size);
+  const g = c.getContext("2d");
+  const cx = size / 2, cy = size / 2;
+  const lw = Math.max(2, size * 0.2);
+  const r = size / 2 - lw / 2 - size * 0.02;
+  // track
+  g.lineWidth = lw;
+  g.strokeStyle = "rgba(128,134,139,0.35)";
+  g.beginPath();
+  g.arc(cx, cy, r, 0, Math.PI * 2);
+  g.stroke();
+  // value arc, clockwise from 12 o'clock
+  const p = Math.max(0, Math.min(100, pct));
+  if (p > 0) {
+    g.strokeStyle = color;
+    g.lineCap = p >= 100 ? "butt" : "round";
+    g.beginPath();
+    g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * p) / 100);
+    g.stroke();
+  }
+  // centre mark: solid dot = "used" (filling up), hollow ring = "left" (what remains)
+  const dr = size * 0.13;
+  g.beginPath();
+  g.arc(cx, cy, dr, 0, Math.PI * 2);
+  if (mode === "left") {
+    g.lineWidth = Math.max(1, size * 0.07);
+    g.strokeStyle = color;
+    g.stroke();
+  } else if (mode === "used") {
+    g.fillStyle = color;
+    g.fill();
+  }
+  return g.getImageData(0, 0, size, size);
+}
+
+function setGaugeIcon(pct, color, mode) {
+  try {
+    chrome.action.setIcon({ imageData: { 16: drawGauge(16, pct, color, mode), 32: drawGauge(32, pct, color, mode) } });
+  } catch (e) {
+    console.warn("[usage-meter] setIcon failed", e);
+  }
+}
+
 async function updateBadge(snap) {
   const wins = (snap && snap.windows) || [];
   if (!wins.length) {
     chrome.action.setBadgeText({ text: "" });
+    setGaugeIcon(0, "#80868b", null);
     return;
   }
   const prefs = await UsageShared.loadPrefs();
   const showLeft = prefs.view === "left";
   // Badge tracks whichever window is closest to running out.
   const tight = UsageShared.pickWindow(wins, "tightest");
-  const left = Math.max(0, 100 - tight.usedPercent);
-  chrome.action.setBadgeText({ text: `${Math.round(showLeft ? left : tight.usedPercent)}` });
-  chrome.action.setBadgeBackgroundColor({ color: UsageShared.LEVEL_COLORS[UsageShared.levelFor(left, prefs.thresholds)] });
+  const used = Math.max(0, Math.min(100, tight.usedPercent));
+  const left = 100 - used;
+  const shown = showLeft ? left : used;
+  const color = UsageShared.LEVEL_COLORS[UsageShared.levelFor(left, prefs.thresholds)];
+  setGaugeIcon(shown, color, showLeft ? "left" : "used");
+  chrome.action.setBadgeText({ text: `${Math.round(shown)}` });
+  chrome.action.setBadgeBackgroundColor({ color });
+  chrome.action.setBadgeTextColor && chrome.action.setBadgeTextColor({ color: "#ffffff" });
   chrome.action.setTitle({
     title:
-      wins.map((w) => `${w.label}: ${w.usedPercent}% used · ${Math.round((100 - w.usedPercent) * 10) / 10}% left`).join("\n") +
-      `\nBadge: ${tight.label} ${showLeft ? "left" : "used"}`,
+      `Showing % ${showLeft ? "LEFT" : "USED"} · ${tight.label}: ${Math.round(shown * 10) / 10}% ${showLeft ? "left" : "used"}\n` +
+      wins.map((w) => `${w.label}: ${w.usedPercent}% used · ${Math.round((100 - w.usedPercent) * 10) / 10}% left`).join("\n"),
   });
 }
 
@@ -143,15 +196,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await chrome.storage.local.clear();
         if (prefs) await set({ prefs });
       }).then(() => {
-        chrome.action.setBadgeText({ text: "" });
+        updateBadge(null);
         sendResponse({ ok: true });
       });
       return true;
   }
 });
 
-// Restore badge after the worker restarts.
-get("latestUsage").then(({ latestUsage }) => latestUsage && updateBadge(latestUsage));
+// Restore badge + icon after the worker restarts.
+get("latestUsage").then(({ latestUsage }) => updateBadge(latestUsage || null));
 
 serial(async () => {
   const { diag = {} } = await get("diag");

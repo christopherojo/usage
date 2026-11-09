@@ -12,6 +12,7 @@
   let accountId = null;
   let latest = null; // last normalized usage snapshot
   let inflightUsage = null;
+  let lastResult = null; // { ok, status, error, ts } of the most recent usage fetch
   const pending = new Map(); // queryId -> start info
 
   const send = (msg) => {
@@ -125,14 +126,17 @@
           let body = "";
           try { body = (await r.text()).slice(0, 300); } catch (_) {}
           send({ type: "usage-error", status: r.status, error: body, authed: !!authHeader, ts: Date.now() });
+          lastResult = { ok: false, status: r.status, error: body, ts: Date.now() };
           return latest;
         }
         const snap = normalizeUsage(await r.json());
         latest = snap;
         send({ type: "usage", snapshot: snap });
+        lastResult = { ok: true, status: r.status, ts: Date.now() };
         return snap;
       } catch (e) {
         send({ type: "usage-error", status: 0, error: String(e), authed: !!authHeader, ts: Date.now() });
+        lastResult = { ok: false, status: 0, error: String(e), ts: Date.now() };
         return latest;
       } finally {
         setTimeout(() => (inflightUsage = null), 0);
@@ -357,7 +361,8 @@
       return;
     }
     if (msg && msg.type === "refresh-usage") {
-      fetchUsage().then((s) => sendResponse({ ok: !!s, snapshot: s }));
+      // Report the outcome of THIS fetch, not just whether we have cached data.
+      fetchUsage().then(() => sendResponse({ ...(lastResult || { ok: false, status: 0 }), windows: latest ? latest.windows.length : 0 }));
       return true;
     }
   });

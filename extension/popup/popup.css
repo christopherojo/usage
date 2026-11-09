@@ -59,7 +59,16 @@ button {
 }
 button:hover { border-color: var(--muted); }
 .icon-btn { padding: 2px 8px; font-size: 15px; }
-.icon-btn.spin { animation: spin .8s linear infinite; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; transition: background .2s, border-color .2s, color .2s; }
+.icon-btn:disabled { cursor: progress; opacity: 1; }
+.icon-btn.spin { animation: spin .7s linear infinite; color: var(--accent); border-color: var(--accent); }
+.icon-btn.flash-ok { background: color-mix(in srgb, var(--ok) 18%, var(--panel)); border-color: var(--ok); color: var(--ok); }
+.icon-btn.flash-err { background: color-mix(in srgb, var(--critical) 15%, var(--panel)); border-color: var(--critical); color: var(--critical); }
+.refresh-msg { font-size: 12px; transition: color .2s; }
+.refresh-msg.loading { color: var(--accent); }
+.refresh-msg.ok { color: var(--ok); }
+.refresh-msg.error { color: var(--critical); font-weight: 500; }
+.version { align-self: center; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .danger { color: var(--bad); }
 
@@ -100,6 +109,7 @@ button:hover { border-color: var(--muted); }
 
 footer { display: flex; gap: 6px; padding: 10px 14px; }
 footer .danger { margin-left: auto; }
+footer { align-items: center; }
 
 details summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 6px; }
 details summary::-webkit-details-marker { display: none; }
@@ -174,3 +184,9 @@ h2.inline { display: inline; margin: 0; }
 .chat .meter { grid-column: 1 / -1; height: 3px; background: var(--track); border-radius: 2px; overflow: hidden; }
 .chat .meter > span { display: block; height: 100%; background: var(--accent); }
 .chat .sub .long { color: var(--warn-lvl); }
+
+.title-block { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+h1 { white-space: nowrap; }
+#updated { font-size: 11px; min-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#updated.refresh-msg.loading::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: currentColor; animation: blink 1s ease-in-out infinite; vertical-align: 1px; }
+@keyframes blink { 50% { opacity: .25; } }

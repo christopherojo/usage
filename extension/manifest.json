@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Usage Meter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "See your ChatGPT / Codex 5-hour and weekly limits, and an estimated token cost for each query. Runs locally on chatgpt.com; no extra login.",
   "permissions": [
     "storage",
@@ -39,10 +39,20 @@
   ],
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "ChatGPT Usage"
+    "default_title": "ChatGPT Usage",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   }
 }

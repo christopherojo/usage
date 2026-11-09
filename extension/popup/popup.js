@@ -109,7 +109,8 @@ function renderLimits(latest, history, error) {
     $("plan").textContent = latest.plan;
     $("plan").hidden = false;
   }
-  $("updated").textContent = latest ? fmtAgo(latest.ts) : "";
+  lastLatestTs = latest ? latest.ts : null;
+  paintUpdated();
 
   if (!latest || !latest.windows.length) {
     note.hidden = false;
@@ -323,23 +324,66 @@ async function render() {
 
 let tabState = { checked: false };
 
+let refreshMsg = null; // { kind: "loading"|"ok"|"error", text } shown next to the refresh button
+let refreshTimer = null;
+let lastLatestTs = null;
+
+function showRefreshMsg(kind, text, holdMs) {
+  refreshMsg = { kind, text };
+  clearTimeout(refreshTimer);
+  paintUpdated();
+  if (holdMs) refreshTimer = setTimeout(() => ((refreshMsg = null), paintUpdated()), holdMs);
+}
+
+function paintUpdated() {
+  const u = $("updated");
+  if (refreshMsg) {
+    u.textContent = refreshMsg.text;
+    u.className = `refresh-msg ${refreshMsg.kind}`;
+  } else {
+    u.textContent = lastLatestTs ? `Updated ${fmtAgo(lastLatestTs)}` : "";
+    u.className = "muted";
+  }
+}
+
 async function refresh() {
   const btn = $("refresh");
+  if (btn.disabled) return;
+  btn.disabled = true;
   btn.classList.add("spin");
+  btn.setAttribute("aria-busy", "true");
+  showRefreshMsg("loading", "Refreshing…");
+  const started = Date.now();
+  let outcome;
   try {
     const tabs = await chrome.tabs.query({ url: "https://chatgpt.com/*" });
     if (!tabs.length) {
       tabState = { checked: true, found: false };
-      return;
+      outcome = ["error", "Open chatgpt.com first"];
+    } else {
+      const tab = tabs.find((t) => t.active) || tabs[0];
+      const ping = await chrome.tabs.sendMessage(tab.id, { type: "ping" }).catch(() => null);
+      tabState = { checked: true, found: true, attached: !!ping, interceptor: ping && ping.interceptor, authed: ping && ping.authed };
+      if (!ping) {
+        outcome = ["error", "Reload your chatgpt.com tab"];
+      } else {
+        const res = await chrome.tabs.sendMessage(tab.id, { type: "refresh-usage" }).catch((e) => ({ ok: false, status: 0, error: String(e) }));
+        if (res && res.ok) outcome = ["ok", res.windows ? "Updated ✓" : "Updated, but no limits found"];
+        else outcome = ["error", res && res.status ? `Failed (HTTP ${res.status})` : "Failed (network)"];
+      }
     }
-    const tab = tabs.find((t) => t.active) || tabs[0];
-    const ping = await chrome.tabs.sendMessage(tab.id, { type: "ping" }).catch(() => null);
-    tabState = { checked: true, found: true, attached: !!ping, interceptor: ping && ping.interceptor, authed: ping && ping.authed };
-    if (ping) await chrome.tabs.sendMessage(tab.id, { type: "refresh-usage" }).catch(() => null);
-  } finally {
-    btn.classList.remove("spin");
-    await render();
+  } catch (e) {
+    outcome = ["error", "Failed"];
   }
+  // Keep the spinner up long enough to be noticed.
+  await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - started))));
+  await render();
+  btn.classList.remove("spin");
+  btn.disabled = false;
+  btn.removeAttribute("aria-busy");
+  btn.classList.add(outcome[0] === "ok" ? "flash-ok" : "flash-err");
+  setTimeout(() => btn.classList.remove("flash-ok", "flash-err"), 900);
+  showRefreshMsg(outcome[0], outcome[1], outcome[0] === "ok" ? 2500 : 6000);
 }
 
 function renderStatus(diag, usageError, latest) {
@@ -463,4 +507,6 @@ $("clear").addEventListener("click", async () => {
 });
 chrome.storage.onChanged.addListener((_c, area) => area === "local" && render());
 
+setInterval(paintUpdated, 15000);
+$("version").textContent = `v${chrome.runtime.getManifest().version}`;
 render().then(refresh);

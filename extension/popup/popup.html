@@ -7,12 +7,14 @@
 </head>
 <body>
   <header>
-    <div class="title">
-      <h1>ChatGPT Usage</h1>
-      <span id="plan" class="chip" hidden></span>
+    <div class="title-block">
+      <div class="title">
+        <h1>ChatGPT Usage</h1>
+        <span id="plan" class="chip" hidden></span>
+      </div>
+      <span id="updated" class="muted" role="status" aria-live="polite"></span>
     </div>
     <div class="head-actions">
-      <span id="updated" class="muted"></span>
       <button id="refresh" class="icon-btn" title="Refresh from chatgpt.com" aria-label="Refresh">↻</button>
       <button id="open-dashboard" class="icon-btn" title="Open dashboard" aria-label="Open dashboard">▦</button>
       <button id="open-settings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
@@ -65,6 +67,7 @@
     <button id="export-csv">Export CSV</button>
     <button id="export-json">Export JSON</button>
     <button id="clear" class="danger">Clear data</button>
+    <span id="version" class="muted small version"></span>
   </footer>
 
   <script src="../lib/shared.js"></script>

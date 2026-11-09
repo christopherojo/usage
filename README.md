@@ -30,7 +30,9 @@ npm run build        # bundles the o200k_base tokenizer into extension/vendor/
 2. Click **Load unpacked** and select the `extension/` folder.
 3. Open (or reload) a chatgpt.com tab, then click the toolbar icon.
 
-The badge shows your 5-hour usage % (green / orange ≥70 / red ≥90).
+The toolbar icon is a live ring gauge for whichever limit is closest to running out. In **Used** mode
+it fills up and has a solid centre dot. In **Left** mode it drains and has a hollow centre. The colour follows
+your thresholds, and the badge shows the number. The popup footer and the Settings page show the loaded version.
 
 ## How it works
 

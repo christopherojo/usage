@@ -45,15 +45,16 @@ function render(latestUsage) {
   $("pill-position").disabled = $("pill-window").disabled = !prefs.pill.enabled;
 }
 
-function readThresholds() {
+function readThresholds(showError) {
   const t = { caution: Number($("t-caution").value), warn: Number($("t-warn").value), critical: Number($("t-critical").value) };
-  const ok = Object.values(t).every((v) => v >= 1 && v <= 99) && t.critical < t.warn && t.warn < t.caution;
-  $("t-error").hidden = ok;
+  const ok = Object.values(t).every((v) => Number.isFinite(v) && v >= 1 && v <= 99) && t.critical < t.warn && t.warn < t.caution;
+  if (ok || showError) $("t-error").hidden = ok;
   renderScale(ok ? t : prefs.thresholds);
   return ok ? t : null;
 }
 
 (async () => {
+  $("version").textContent = `v${chrome.runtime.getManifest().version}`;
   prefs = await UsageShared.loadPrefs();
   const { latestUsage } = await chrome.storage.local.get("latestUsage");
   render(latestUsage);
@@ -63,10 +64,12 @@ function readThresholds() {
     if (v) save({ view: v }).then(() => render(latestUsage));
   });
   for (const id of ["t-caution", "t-warn", "t-critical"]) {
+    // Save as soon as the numbers are valid; only complain once you leave the field.
     $(id).addEventListener("input", () => {
-      const t = readThresholds();
+      const t = readThresholds(false);
       if (t) save({ thresholds: t });
     });
+    $(id).addEventListener("change", () => readThresholds(true));
   }
   $("poll").addEventListener("change", (e) => save({ pollMinutes: Number(e.target.value) }));
   $("pill-enabled").addEventListener("change", (e) => save({ pill: { ...prefs.pill, enabled: e.target.checked } }).then(() => render(latestUsage)));
