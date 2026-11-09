@@ -1,61 +1,128 @@
 # ChatGPT Usage Meter
 
-A Chrome extension (Manifest V3) that shows, right from the toolbar:
+A Chrome extension that shows your ChatGPT / Codex **5-hour and weekly limits**, forecasts when you'll
+run out, and estimates the **token cost of every query and conversation**. It runs inside your signed-in
+chatgpt.com tab, so there's no extra login, API key or server.
 
-- **5-hour and weekly limits**: % used, % left, reset countdown and a history sparkline
-  (from the same endpoint ChatGPT's Codex usage page reads).
-- **Per-query cost**: estimated tokens for your prompt, the conversation context re-sent with it,
-  the reply, the reasoning summary and tool calls, plus how much each query moved your limit %.
-- **Burn-rate forecast**: "at this pace you run out ~3:40 PM", an even-pace marker on each bar,
-  and a dashed projection to reset on the graph.
-- **Used / Left toggle** and colour levels (green, yellow, orange, red) by % left. Thresholds can be changed in Settings.
-- **Cost per conversation**: the costliest chats in the popup, plus a full sortable table in the dashboard
-  that flags long chats where each message re-sends a lot of history.
-- **Dashboard**: daily or weekly charts of tokens, messages or limit % used, and a model comparison.
-- **On-page pill** on chatgpt.com that you can click to expand and drag anywhere.
-- **Settings**: default view, colour thresholds, refresh interval, and pill on/off, position and window.
+**Version 1.0.0** · Manifest V3 · Chrome / Chromium-based browsers
 
-No extra login, API key or server. It runs inside your signed-in chatgpt.com tab and stores
-everything in `chrome.storage.local` on your machine. Message text is tokenized and then discarded;
-only counts and a 140-character preview are stored.
+## Features
+
+**Limits**
+- 5-hour and weekly usage with reset countdowns and a history graph for the current window.
+- **Used / Left** toggle, remembered across sessions.
+- Colour levels by % left: green, yellow, orange, red. You can change the thresholds.
+- A low-limit banner when any limit is running out.
+
+**Burn-rate forecast**
+- "⚠ At this pace you run out ~3:40 PM (in 1h 12m)", or "✓ On pace for ~41% used at reset".
+- An even-pace marker on each bar, and a dashed projection to reset on the graph.
+- Uses your recent pace, blended with the window's average when history is still short, so one busy
+  session isn't projected across nights and weekends.
+
+**Cost tracking**
+- Per query: estimated tokens for your prompt, the earlier conversation re-sent as context, the reply,
+  reasoning and tool calls, plus how much the query moved each limit.
+- Per conversation: the costliest chats, and a flag on long chats where every message re-sends a lot of history.
+- Per model: average cost, thinking time and limit used per message.
+
+**Where you see it**
+- **Toolbar icon:** a live ring gauge with a number badge. It fills up in Used mode and drains in Left mode.
+- **Popup:** limits, forecast, activity, costliest chats, recent queries, a status panel, and CSV / JSON export.
+- **Dashboard:** daily or weekly charts of tokens, messages or limit used; a sortable conversation table;
+  a model comparison.
+- **On-page pill** on chatgpt.com. Click it to expand, drag it anywhere. It can show the 5-hour limit,
+  the weekly limit, both, or whichever is closest to running out.
+
+**Settings**
+- Default view, and the colour thresholds.
+- Which limit the toolbar icon tracks.
+- How often to check limits (1–15 minutes).
+- Pill on/off, position, and what it shows.
 
 ## Install
 
-```bash
-npm install
-npm run build        # bundles the o200k_base tokenizer into extension/vendor/
-```
+The tokenizer bundle is committed, so no build step is needed.
 
-1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and select the `extension/` folder.
-3. Open (or reload) a chatgpt.com tab, then click the toolbar icon.
+1. Clone this repo.
+2. Open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and select the `extension/` folder.
+4. Open (or reload) a chatgpt.com tab while signed in, then click the toolbar icon.
 
-The toolbar icon is a live ring gauge for whichever limit is closest to running out. In **Used** mode
-it fills up and has a solid centre dot. In **Left** mode it drains and has a hollow centre. The colour follows
-your thresholds, and the badge shows the number. The popup footer and the Settings page show the loaded version.
+Pin the extension from the puzzle-piece menu to keep the gauge visible.
+
+### Updating
+
+After pulling changes, click **reload** on the extension in `chrome://extensions`. Chrome reads the
+popup and settings pages fresh from disk, but keeps running the old background script until you do.
+If you forget, the popup shows an **"Update not fully loaded"** banner with a one-click **Reload
+extension** button. That button re-attaches to open chatgpt.com tabs without reloading them.
+
+## Privacy
+
+- Everything stays in `chrome.storage.local` in your browser. Nothing is sent anywhere except the
+  same chatgpt.com requests the page itself makes.
+- Message text is tokenized and then discarded. Only token counts, the chat title and a 140-character
+  preview of your prompt are stored.
+- **Clear data** in the popup deletes all history but keeps your settings.
+
+## Accuracy
+
+- **Limits are exact** when ChatGPT's usage endpoint (`/backend-api/wham/usage`) returns data. That
+  endpoint is internal and undocumented. If OpenAI changes it, the Limits section shows the error and
+  the Status panel says why.
+- **These limits meter Codex.** Plain ChatGPT chats may not move the 5-hour or weekly %, so per-query
+  limit changes are usually 0 for chats and non-zero for Codex work.
+- **Token counts are estimates.** They use the real o200k tokenizer on visible text, but the model also
+  sees hidden system prompts, tool definitions, memory, file contents and hidden reasoning. Treat
+  "think" as a lower bound.
+- "ctx" assumes the full visible history is re-sent each turn. Very long chats may be truncated server-side.
+- The forecast learns from snapshots taken while chatgpt.com is open. A shorter check interval in
+  Settings gives it more data.
+
+## Troubleshooting
+
+Open the popup and expand **Status**. It shows:
+- whether the extension is attached to your chatgpt.com tab
+- whether it's seeing your messages
+- the limits request's HTTP status and error
+- which ChatGPT endpoints it has seen
+
+**Copy diagnostics** copies a report without tokens or prompt text.
+
+| Symptom | Fix |
+|---|---|
+| "Reload your chatgpt.com tab" | The tab was open before the extension was installed. Reload it. |
+| Badge or icon doesn't match the popup | The background is out of date. Click **Reload extension** in the popup banner. |
+| Limits show HTTP 401/403 | Sign in to chatgpt.com again, then press ↻. |
+| Old errors on `chrome://extensions` | Chrome keeps errors until deleted. Click **Clear all**. |
 
 ## How it works
 
 | File | Role |
 |---|---|
-| `extension/inject.js` | Runs in the page's own JS world. Wraps `fetch` to *observe* ChatGPT's requests: sending a message (`POST /backend-api/conversation`), starting a Codex task (`POST /backend-api/wham/tasks`), and usage reads (`GET /backend-api/wham/usage`). |
-| `extension/content.js` | Snapshots usage before and after each query, fetches the finished conversation to split prompt / context / reply / reasoning / tool text, and polls usage every 5 minutes while the tab is visible. |
-| `extension/background.js` | Counts tokens (o200k_base, the GPT-4o/GPT-5 tokenizer), stores history, sets the badge. |
-| `extension/popup/` | Toolbar popup: limits, forecast, top chats, recent queries, CSV / JSON export. |
-| `extension/dashboard/` | Full-page charts, cost per conversation, model comparison. |
+| `extension/inject.js` | Runs in the page's JS world. Wraps `fetch` to *observe* (never modify) ChatGPT's requests: sending a message, starting a Codex task, and usage reads. |
+| `extension/content.js` | Snapshots usage before and after each query, reads the finished conversation to split prompt / context / reply / reasoning / tool text, and checks usage on a timer while the tab is visible. |
+| `extension/pill.js` | The on-page pill (Shadow DOM, reads from storage only). |
+| `extension/background.js` | Counts tokens, stores history, draws the toolbar gauge and badge, and re-attaches to open tabs after a reload. |
+| `extension/popup/` | Toolbar popup. |
+| `extension/dashboard/` | Full-page charts and tables. |
 | `extension/options/` | Settings page. |
-| `extension/pill.js` | Floating usage pill on chatgpt.com (Shadow DOM, reads from storage only). |
-| `extension/lib/shared.js` | Settings defaults, colour levels, formatting, conversation aggregation. |
-| `extension/lib/forecast.js` | Burn-rate maths. Tests: `node test/forecast.test.js` |
+| `extension/lib/shared.js` | Settings defaults, colour levels, formatting, conversation totals, build stamp. |
+| `extension/lib/forecast.js` | Burn-rate maths. |
+| `extension/vendor/tokenizer.js` | o200k_base tokenizer, bundled from `js-tiktoken` by `npm run build`. |
 
-## Accuracy caveats
+## Development
 
-- **Limits are exact** when `/backend-api/wham/usage` returns data. That endpoint is internal and
-  undocumented, so if OpenAI changes it the Limits section will show an error. The parser is
-  deliberately loose: any object with `used_percent` is picked up.
-- **These limits meter Codex.** Plain ChatGPT chats may not move the 5h/weekly %, so per-query
-  deltas will usually be 0 for chats and non-zero for Codex work.
-- **Token counts are estimates.** They count visible text with the real tokenizer, but the model also
-  sees a hidden system prompt, tool schemas, memory and file contents, and hidden reasoning tokens
-  (only the reasoning *summary* is visible). Treat `think` as a lower bound.
-- "ctx" assumes the full visible history is re-sent each turn. Long chats may be truncated server-side.
+```bash
+npm install
+npm run build   # rebuild extension/vendor/tokenizer.js
+npm test        # forecast unit tests
+```
+
+When releasing, bump the version in **both** `extension/manifest.json` and `BUILD` in
+`extension/lib/shared.js`. The popup compares them to detect a stale background script.
+
+## License
+
+See [LICENSE](LICENSE).

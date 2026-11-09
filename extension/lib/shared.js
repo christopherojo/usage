@@ -3,7 +3,7 @@
 (function (root) {
   // Bump on every change. Pages read this file fresh from disk; the background keeps whatever
   // was loaded at the last extension reload, so a mismatch means "reload the extension".
-  const BUILD = "0.3.3";
+  const BUILD = "1.0.0";
 
   const DEFAULT_PREFS = {
     view: "used", // "used" | "left"
