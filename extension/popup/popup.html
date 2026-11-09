@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ChatGPT Usage</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>ChatGPT Usage</h1>
+      <span id="plan" class="chip" hidden></span>
+    </div>
+    <div class="head-actions">
+      <span id="updated" class="muted"></span>
+      <button id="refresh" class="icon-btn" title="Refresh from chatgpt.com" aria-label="Refresh">↻</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>Limits</h2>
+    <div id="limits"></div>
+    <p id="limits-note" class="note" hidden></p>
+  </section>
+
+  <section>
+    <h2>Your activity <span class="muted small">(tracked by this extension)</span></h2>
+    <div class="stats" id="stats"></div>
+    <div id="models" class="models"></div>
+  </section>
+
+  <section>
+    <div class="row-between">
+      <h2>Recent queries</h2>
+      <span class="muted small" id="tok-note"></span>
+    </div>
+    <ol id="queries" class="queries"></ol>
+  </section>
+
+  <section>
+    <details id="status-box">
+      <summary><h2 class="inline">Status</h2> <span id="status-summary" class="muted small"></span></summary>
+      <ul id="status" class="status"></ul>
+      <div class="status-actions"><button id="copy-diag">Copy diagnostics</button></div>
+    </details>
+  </section>
+
+  <footer>
+    <button id="export-csv">Export CSV</button>
+    <button id="export-json">Export JSON</button>
+    <button id="clear" class="danger">Clear data</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

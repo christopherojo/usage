@@ -1,0 +1,13 @@
+{
+  "name": "chatgpt-usage-meter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser extension that shows ChatGPT/Codex 5-hour and weekly limits and per-query token estimates.",
+  "scripts": {
+    "build": "esbuild src/tokenizer-entry.js --bundle --format=iife --minify --outfile=extension/vendor/tokenizer.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "js-tiktoken": "^1.0.15"
+  }
+}
