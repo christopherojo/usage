@@ -3,7 +3,7 @@
 (function (root) {
   // Bump on every change. Pages read this file fresh from disk; the background keeps whatever
   // was loaded at the last extension reload, so a mismatch means "reload the extension".
-  const BUILD = "0.3.2";
+  const BUILD = "0.3.3";
 
   const DEFAULT_PREFS = {
     view: "used", // "used" | "left"
@@ -13,7 +13,7 @@
     pill: {
       enabled: true,
       position: "bottom-right", // bottom-right | bottom-left | top-right | top-left
-      window: "tightest", // tightest | first (shortest window) | <window key>
+      window: "tightest", // tightest | all (both limits) | <window key>; legacy "first" = shortest
     },
   };
 

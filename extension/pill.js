@@ -30,6 +30,9 @@
     .pill.lvl-critical .dot { animation: pulse 1.6s ease-in-out infinite; }
     @keyframes pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--lvl) 30%, transparent); } }
     .pct { font-weight: 650; font-variant-numeric: tabular-nums; }
+    .item { display: inline-flex; align-items: center; gap: 4px; }
+    .item .pct { color: var(--lvl); }
+    .sep, .unit { color: var(--muted); }
     .sub { color: var(--muted); }
     .sub.hot { color: var(--lvl); }
     .x { margin-left: 2px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
@@ -123,6 +126,14 @@
     });
   }
 
+  // Compact names for the two-limit pill: "5-hour" -> "5h", "Weekly" -> "Wk".
+  function shortLabel(label) {
+    if (/^weekly$/i.test(label)) return "Wk";
+    if (/^daily$/i.test(label)) return "Day";
+    const m = /^(\d+)-(hour|day)$/i.exec(label);
+    return m ? `${m[1]}${m[2][0].toLowerCase()}` : label;
+  }
+
   function windowView(w) {
     const showLeft = prefs.view === "left";
     const used = Math.min(100, Math.max(0, w.usedPercent));
@@ -151,17 +162,28 @@
     for (const n of [...root.childNodes]) if (n.tagName !== "STYLE") n.remove();
 
     const views = latest.windows.map(windowView);
-    const main = windowView(pickWindow(latest.windows, prefs.pill.window));
+    const both = prefs.pill.window === "all";
+    const shown = both ? views : [windowView(pickWindow(latest.windows, prefs.pill.window))];
+    const RANK = { ok: 0, caution: 1, warn: 2, critical: 3 };
+    const worst = shown.reduce((a, v) => (RANK[v.lvl] > RANK[a.lvl] ? v : a));
+    const hot = shown.filter((v) => v.hot).sort((a, b) => (a.f.runOutAt || 0) - (b.f.runOutAt || 0))[0];
+    const hotText = (v, withName) =>
+      `· ${withName ? `${shortLabel(v.w.label)} ` : ""}${v.f.status === "maxed" ? `back in ${fmtDur(v.w.resetAt - Date.now())}` : `out ~${fmtTime(v.f.runOutAt)}`}`;
     const wrap = h("div", { class: "wrap" });
     place(wrap);
 
+    const items = both
+      ? shown.flatMap((v, i) => [
+          i ? h("span", { class: "sep", text: "·" }) : null,
+          h("span", { class: `item lvl-${v.lvl}`, title: `${v.w.label}: ${v.shown}% ${v.unit}` }, h("span", { class: "dot" }), h("span", { class: "name", text: shortLabel(v.w.label) }), h("span", { class: "pct", text: `${v.shown}%` }))
+        ]).concat(h("span", { class: "unit", text: worst.unit }))
+      : [h("span", { class: "dot" }), h("span", { class: "name", text: worst.w.label }), h("span", { class: "pct", text: `${worst.shown}% ${worst.unit}` })];
+
     pill = h(
       "div",
-      { class: `pill lvl-${main.lvl}`, title: "ChatGPT usage: click for details, drag to move" },
-      h("span", { class: "dot" }),
-      h("span", { class: "name", text: main.w.label }),
-      h("span", { class: "pct", text: `${main.shown}% ${main.unit}` }),
-      main.hot ? h("span", { class: "sub hot", text: main.f.status === "maxed" ? `· back in ${fmtDur(main.w.resetAt - Date.now())}` : `· out ~${fmtTime(main.f.runOutAt)}` }) : null,
+      { class: `pill lvl-${worst.lvl}`, title: "ChatGPT usage: click for details, drag to move" },
+      items,
+      hot ? h("span", { class: `sub hot lvl-${hot.lvl}`, text: hotText(hot, both) }) : null,
       h("button", { class: "x", title: "Hide until reload", text: "×", onclick: (e) => (e.stopPropagation(), (dismissed = true), render()) })
     );
     enableDrag(wrap, pill);

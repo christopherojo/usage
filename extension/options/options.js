@@ -46,18 +46,20 @@ function render(latestUsage) {
   $("poll").value = String(prefs.pollMinutes);
   $("pill-enabled").checked = prefs.pill.enabled;
   $("pill-position").value = prefs.pill.position;
-  const opts = [["tightest", "Closest to running out"], ["first", "Shortest window (e.g. 5-hour)"]];
-  for (const w of (latestUsage && latestUsage.windows) || []) opts.push([w.key, `${w.label} limit`]);
+  // Pill: one limit, the other, the closest-to-empty one, or all of them.
+  const wins = (latestUsage && latestUsage.windows) || [];
+  const pillSel = prefs.pill.window === "first" ? (wins[0] && wins[0].key) || "5-hour" : prefs.pill.window;
   $("pill-window").replaceChildren(
-    ...opts.map(([v, t]) => {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = t;
-      return o;
+    ...windowChoices(latestUsage).concat([["all", "Both"]]).map(([v, t]) => {
+      const b = document.createElement("button");
+      b.dataset.v = v;
+      b.textContent = t;
+      b.disabled = !prefs.pill.enabled;
+      b.setAttribute("aria-pressed", String(pillSel === v));
+      return b;
     })
   );
-  $("pill-window").value = prefs.pill.window;
-  $("pill-position").disabled = $("pill-window").disabled = !prefs.pill.enabled;
+  $("pill-position").disabled = !prefs.pill.enabled;
 }
 
 function readThresholds(showError) {
@@ -93,7 +95,10 @@ function readThresholds(showError) {
   $("poll").addEventListener("change", (e) => save({ pollMinutes: Number(e.target.value) }));
   $("pill-enabled").addEventListener("change", (e) => save({ pill: { ...prefs.pill, enabled: e.target.checked } }).then(() => render(latestUsage)));
   $("pill-position").addEventListener("change", (e) => save({ pill: { ...prefs.pill, position: e.target.value, offset: null } }));
-  $("pill-window").addEventListener("change", (e) => save({ pill: { ...prefs.pill, window: e.target.value } }));
+  $("pill-window").addEventListener("click", (e) => {
+    const v = e.target.dataset && e.target.dataset.v;
+    if (v && !e.target.disabled) save({ pill: { ...prefs.pill, window: v } }).then(() => render(latestUsage));
+  });
   $("reset").addEventListener("click", async () => {
     prefs = UsageShared.mergePrefs();
     await chrome.storage.local.set({ prefs });
