@@ -1,4 +1,5 @@
 // Background service worker: tokenizes, stores, and badges.
+importScripts("lib/shared.js");
 try {
   importScripts("vendor/tokenizer.js");
 } catch (e) {
@@ -41,19 +42,31 @@ async function saveUsage(snapshot) {
   updateBadge(snapshot);
 }
 
-function updateBadge(snap) {
-  const primary = snap && snap.windows && snap.windows[0];
-  if (!primary) {
+
+async function updateBadge(snap) {
+  const wins = (snap && snap.windows) || [];
+  if (!wins.length) {
     chrome.action.setBadgeText({ text: "" });
     return;
   }
-  const pct = Math.round(primary.usedPercent);
-  chrome.action.setBadgeText({ text: `${pct}` });
-  chrome.action.setBadgeBackgroundColor({ color: pct >= 90 ? "#d93025" : pct >= 70 ? "#e37400" : "#188038" });
+  const prefs = await UsageShared.loadPrefs();
+  const showLeft = prefs.view === "left";
+  // Badge tracks whichever window is closest to running out.
+  const tight = UsageShared.pickWindow(wins, "tightest");
+  const left = Math.max(0, 100 - tight.usedPercent);
+  chrome.action.setBadgeText({ text: `${Math.round(showLeft ? left : tight.usedPercent)}` });
+  chrome.action.setBadgeBackgroundColor({ color: UsageShared.LEVEL_COLORS[UsageShared.levelFor(left, prefs.thresholds)] });
   chrome.action.setTitle({
-    title: snap.windows.map((w) => `${w.label}: ${w.usedPercent}% used`).join("\n") || "ChatGPT Usage",
+    title:
+      wins.map((w) => `${w.label}: ${w.usedPercent}% used · ${Math.round((100 - w.usedPercent) * 10) / 10}% left`).join("\n") +
+      `\nBadge: ${tight.label} ${showLeft ? "left" : "used"}`,
   });
 }
+
+// Re-badge when the Used/Left toggle changes.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.prefs) get("latestUsage").then(({ latestUsage }) => latestUsage && updateBadge(latestUsage));
+});
 
 function delta(before, after) {
   if (!before || !after) return null;
@@ -118,8 +131,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case "query":
       serial(() => saveQuery(msg.record, msg.texts));
       break;
+    case "open-dashboard":
+      chrome.tabs.create({ url: chrome.runtime.getURL("dashboard/dashboard.html") });
+      break;
+    case "open-settings":
+      chrome.runtime.openOptionsPage();
+      break;
     case "clear-data":
-      serial(() => chrome.storage.local.clear()).then(() => {
+      serial(async () => {
+        const { prefs } = await get("prefs");
+        await chrome.storage.local.clear();
+        if (prefs) await set({ prefs });
+      }).then(() => {
         chrome.action.setBadgeText({ text: "" });
         sendResponse({ ok: true });
       });

@@ -14,11 +14,19 @@
     <div class="head-actions">
       <span id="updated" class="muted"></span>
       <button id="refresh" class="icon-btn" title="Refresh from chatgpt.com" aria-label="Refresh">↻</button>
+      <button id="open-dashboard" class="icon-btn" title="Open dashboard" aria-label="Open dashboard">▦</button>
+      <button id="open-settings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
     </div>
   </header>
 
   <section>
-    <h2>Limits</h2>
+    <div class="row-between">
+      <h2>Limits</h2>
+      <div id="view-toggle" class="seg" role="group" aria-label="Show limits as">
+        <button data-view="used" aria-pressed="true">Used</button>
+        <button data-view="left" aria-pressed="false">Left</button>
+      </div>
+    </div>
     <div id="limits"></div>
     <p id="limits-note" class="note" hidden></p>
   </section>
@@ -27,6 +35,14 @@
     <h2>Your activity <span class="muted small">(tracked by this extension)</span></h2>
     <div class="stats" id="stats"></div>
     <div id="models" class="models"></div>
+  </section>
+
+  <section>
+    <div class="row-between">
+      <h2>Costliest chats · 7d</h2>
+      <a href="#" id="all-chats" class="small link">All chats →</a>
+    </div>
+    <ol id="top-chats" class="chats"></ol>
   </section>
 
   <section>
@@ -51,6 +67,8 @@
     <button id="clear" class="danger">Clear data</button>
   </footer>
 
+  <script src="../lib/shared.js"></script>
+  <script src="../lib/forecast.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

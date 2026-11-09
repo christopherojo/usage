@@ -1,6 +1,14 @@
 const $ = (id) => document.getElementById(id);
 const HOUR = 3600 * 1000;
 
+// Colour level from % remaining. Same thresholds as the badge in background.js.
+function levelFor(left) {
+  return UsageShared.levelFor(left, prefs.thresholds);
+}
+const LEVEL_TEXT = { ok: "Plenty left", caution: "Over half used", warn: "Running low", critical: "Almost out" };
+
+let prefs = UsageShared.mergePrefs();
+
 function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -13,7 +21,7 @@ function el(tag, attrs = {}, ...children) {
   return n;
 }
 
-const fmtNum = (n) => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : n.toLocaleString());
+const fmtNum = UsageShared.fmtNum;
 
 function fmtDur(ms) {
   if (ms <= 0) return "now";
@@ -40,26 +48,55 @@ function fmtTime(ts) {
     : d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
 }
 
-function sparkline(points, spanMs) {
-  // points: [{ts, v}] where v in 0..100
-  const W = 380, H = 28;
-  const now = Date.now();
-  const t0 = now - spanMs;
-  const pts = points.filter((p) => p.ts >= t0);
-  if (pts.length < 2) return null;
-  const x = (ts) => ((ts - t0) / spanMs) * W;
-  const y = (v) => H - 1 - (Math.min(100, Math.max(0, v)) / 100) * (H - 2);
+function sparkline(points, { t0, t1, now = Date.now(), project = null }) {
+  // points: [{ts, v}] where v in 0..100. Domain t0..t1 (the current window).
+  // project: { ts, v } -> dashed line from the live value to that point.
+  const W = 380, H = 30;
+  const span = Math.max(1, t1 - t0);
+  const pts = points.filter((p) => p.ts >= t0 && p.ts <= now);
+  if (!pts.length) return null;
+  const x = (ts) => Math.min(W, Math.max(0, ((ts - t0) / span) * W)).toFixed(1);
+  const y = (v) => (H - 1 - (Math.min(100, Math.max(0, v)) / 100) * (H - 2)).toFixed(1);
   // Step line: usage holds its value until the next sample.
-  let d = `M${x(pts[0].ts).toFixed(1)},${y(pts[0].v).toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) d += ` H${x(pts[i].ts).toFixed(1)} V${y(pts[i].v).toFixed(1)}`;
-  d += ` H${W}`;
-  const area = `${d} V${H} H${x(pts[0].ts).toFixed(1)} Z`;
+  let d = `M${x(pts[0].ts)},${y(pts[0].v)}`;
+  for (let i = 1; i < pts.length; i++) d += ` H${x(pts[i].ts)} V${y(pts[i].v)}`;
+  d += ` H${x(now)}`;
+  const area = `${d} V${H} H${x(pts[0].ts)} Z`;
+  const last = pts[pts.length - 1];
+  let extra = `<line class="now" x1="${x(now)}" x2="${x(now)}" y1="0" y2="${H}"/>`;
+  if (project) extra += `<path class="proj" d="M${x(now)},${y(last.v)} L${x(project.ts)},${y(project.v)}"/>`;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", "spark");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("preserveAspectRatio", "none");
-  svg.innerHTML = `<path class="area" d="${area}"/><path class="line" d="${d}"/>`;
+  svg.innerHTML = `<path class="area" d="${area}"/><path class="line" d="${d}"/>${extra}`;
   return svg;
+}
+
+function forecastLine(w, f, showLeft) {
+  const used = w.usedPercent;
+  const rate = f.ratePerHour != null ? `${f.ratePerHour < 1 ? f.ratePerHour.toFixed(2) : f.ratePerHour.toFixed(1)}%/h` : "";
+  const basis = f.basis === "recent" ? `recent pace (last ${fmtDur(f.lookbackMs)})` : "average pace this window";
+  const tip = rate ? `Burn rate ${rate}, based on ${basis}` : "";
+  const pace =
+    f.evenPaceUsed == null ? "" : used > f.evenPaceUsed + 5 ? " · ahead of even pace" : used < f.evenPaceUsed - 5 ? " · under even pace" : " · on even pace";
+  switch (f.status) {
+    case "maxed":
+      return el("div", { class: "forecast lvl-critical" }, "⛔ Limit reached", w.resetAt ? ` · back in ${fmtDur(w.resetAt - Date.now())}` : "");
+    case "runout": {
+      const lead = w.resetAt ? ` · ${fmtDur(w.resetAt - f.runOutAt)} before reset` : "";
+      const lvl = f.runOutAt - Date.now() < 30 * 60e3 ? "critical" : "warn";
+      return el("div", { class: `forecast lvl-${lvl}`, title: tip }, "⚠ At this pace you run out ", el("b", { text: `~${fmtTime(f.runOutAt)}` }), ` (in ${fmtDur(f.runOutAt - Date.now())})${lead}`, rate ? el("span", { class: "rate", text: rate }) : null);
+    }
+    case "on-track": {
+      const p = Math.round(f.projectedAtReset);
+      return el("div", { class: "forecast", title: tip }, "✓ On pace for ", el("b", { text: showLeft ? `~${100 - p}% left` : `~${p}% used` }), ` at reset${pace}`, rate ? el("span", { class: "rate", text: rate }) : null);
+    }
+    case "idle":
+      return el("div", { class: "forecast", title: tip }, `No recent usage · holding at ${showLeft ? `${Math.round(100 - used)}% left` : `${Math.round(used)}% used`}${pace}`);
+    default:
+      return el("div", { class: "forecast muted" }, "Collecting data for a forecast…");
+  }
 }
 
 function renderLimits(latest, history, error) {
@@ -87,39 +124,76 @@ function renderLimits(latest, history, error) {
     return;
   }
 
+  const showLeft = prefs.view === "left";
+  let tightest = null;
+
   for (const w of latest.windows) {
-    const pct = w.usedPercent;
-    const cls = pct >= 90 ? "bad" : pct >= 70 ? "warn" : "";
+    const used = Math.min(100, Math.max(0, w.usedPercent));
+    const left = Math.round((100 - used) * 10) / 10;
+    const lvl = levelFor(left);
+    if (!tightest || left < tightest.left) tightest = { w, left, lvl };
+    const shown = showLeft ? left : used;
     const reset = w.resetAt
       ? `resets in ${fmtDur(w.resetAt - Date.now())} · ${fmtTime(w.resetAt)}`
       : "reset time unknown";
     const span = (w.windowSeconds || 5 * 3600) * 1000;
+    const now = Date.now();
+    const f = UsageForecast.forecastWindow(w, history, now, latest.ts);
+    const inv = (v) => (showLeft ? 100 - v : v);
+    const t1 = w.resetAt || now;
+    const t0 = w.resetAt ? w.resetAt - span : now - span;
+    let project = null;
+    if (f.status === "runout") project = { ts: f.runOutAt, v: inv(100) };
+    else if (f.status === "on-track" || f.status === "idle") project = w.resetAt ? { ts: w.resetAt, v: inv(f.projectedAtReset) } : null;
+    const paceTick =
+      f.evenPaceUsed == null ? null : el("i", { class: "pace", style: `left:${inv(f.evenPaceUsed)}%`, title: `Even pace: ${Math.round(f.evenPaceUsed)}% used by now` });
     const pts = history
       .map((h) => {
         const hw = h.windows.find((x) => x.key === w.key);
-        return hw ? { ts: h.ts, v: hw.usedPercent } : null;
+        return hw ? { ts: h.ts, v: showLeft ? 100 - hw.usedPercent : hw.usedPercent } : null;
       })
       .filter(Boolean);
     box.append(
       el(
         "div",
-        { class: "limit" },
+        { class: `limit lvl-${lvl}`, title: LEVEL_TEXT[lvl] },
         el(
           "div",
           { class: "limit-top" },
           el("span", { class: "limit-name" }, `${w.label} limit`, w.group ? el("span", { class: "limit-group", text: w.group }) : null),
-          el("span", { class: "limit-pct", text: `${pct}%` })
+          el("span", { class: "limit-pct" }, `${shown}%`, el("span", { class: "limit-unit", text: showLeft ? " left" : " used" }))
         ),
-        el("div", { class: `bar ${cls}` }, el("span", { style: `width:${Math.min(100, pct)}%` })),
-        el("div", { class: "limit-foot" }, el("span", { text: `${Math.max(0, Math.round((100 - pct) * 10) / 10)}% left` }), el("span", { text: reset })),
-        sparkline(pts, span)
+        el("div", { class: "bar" }, el("span", { style: `width:${shown}%` }), paceTick),
+        el(
+          "div",
+          { class: "limit-foot" },
+          el("span", { text: showLeft ? `${used}% used` : `${left}% left` }),
+          el("span", { text: reset })
+        ),
+        forecastLine(w, f, showLeft),
+        sparkline(pts.concat({ ts: latest.ts, v: inv(used) }), { t0, t1, now, project })
       )
+    );
+  }
+
+  // Low-limit banner for the most constrained window.
+  if (tightest && (tightest.lvl === "warn" || tightest.lvl === "critical")) {
+    const { w, left, lvl } = tightest;
+    const when = w.resetAt ? ` · resets in ${fmtDur(w.resetAt - Date.now())}` : "";
+    box.prepend(
+      el("div", { class: `alert lvl-${lvl}` }, el("b", { text: left <= 0 ? `${w.label} limit reached` : `Only ${left}% of your ${w.label} limit left` }), when)
     );
   }
   if (latest.limitReached) {
     note.hidden = false;
     note.textContent = "Limit reached for at least one window.";
   }
+}
+
+function setView(view) {
+  prefs.view = view;
+  for (const b of document.querySelectorAll("#view-toggle button")) b.setAttribute("aria-pressed", String(b.dataset.view === view));
+  chrome.storage.local.set({ prefs }).then(render);
 }
 
 function renderStats(queries) {
@@ -147,6 +221,37 @@ function renderStats(queries) {
   $("models").replaceChildren(...(chips.length ? [el("span", { class: "muted small", text: "Last 5h by model:" }), ...chips] : []));
 }
 
+const LONG_CONTEXT = 20000; // tokens re-sent per message before we flag a chat as "long"
+
+function renderTopChats(queries) {
+  const list = $("top-chats");
+  const chats = UsageShared.aggregateConversations(queries, Date.now() - 7 * 24 * HOUR).slice(0, 4);
+  if (!chats.length) {
+    list.replaceChildren(el("li", { class: "empty", text: "No chats tracked in the last 7 days." }));
+    return;
+  }
+  const max = chats[0].tokens || 1;
+  list.replaceChildren(
+    ...chats.map((c) => {
+      const deltas = Object.entries(c.delta).map(([k, v]) => `+${v}% ${k}`).join(" · ");
+      return el(
+        "li",
+        { class: "chat" },
+        el("a", { href: `https://chatgpt.com/c/${c.conversationId}`, target: "_blank", title: c.title || "", text: c.title || "Untitled chat" }),
+        el("span", { class: "tok", text: `~${fmtNum(c.tokens)}` }),
+        el("div", { class: "meter" }, el("span", { style: `width:${(c.tokens / max) * 100}%` })),
+        el(
+          "div",
+          { class: "sub" },
+          `${c.messages} msg${c.messages === 1 ? "" : "s"} · ~${fmtNum(Math.round(c.tokens / c.messages))}/msg`,
+          deltas ? ` · ${deltas}` : "",
+          c.lastContext > LONG_CONTEXT ? el("span", { class: "long", title: "Every new message re-sends this much history. Starting a fresh chat is cheaper." , text: ` · long chat (${fmtNum(c.lastContext)} ctx)` }) : ""
+        )
+      );
+    })
+  );
+}
+
 function renderQueries(queries, latest) {
   const list = $("queries");
   list.replaceChildren();
@@ -172,7 +277,10 @@ function renderQueries(queries, latest) {
     if (q.reasoningSec) tags.push(el("span", { class: "tag", text: `${Math.round(q.reasoningSec)}s thinking` }));
     if (q.usageDelta) {
       for (const [k, v] of Object.entries(q.usageDelta)) {
-        if (v) tags.push(el("span", { class: "tag delta", title: "Change in limit usage across this query", text: `${v > 0 ? "+" : ""}${v}% ${labels[k] || k}` }));
+        if (!v) continue;
+        const a = Math.abs(v);
+        const grade = a >= 6 ? "critical" : a >= 3 ? "warn" : a >= 1 ? "caution" : "ok";
+        tags.push(el("span", { class: `tag delta lvl-${grade}`, title: "Change in limit usage across this query", text: `${v > 0 ? "+" : ""}${v}% ${labels[k] || k}` }));
       }
     }
     const href = q.conversationId ? `https://chatgpt.com/c/${q.conversationId}` : null;
@@ -195,16 +303,21 @@ function renderQueries(queries, latest) {
 }
 
 async function render() {
-  const { latestUsage, usageHistory = [], usageError, queries = [], diag = {} } = await chrome.storage.local.get([
+  const stored = await chrome.storage.local.get([
     "latestUsage",
     "usageHistory",
     "usageError",
     "queries",
     "diag",
+    "prefs",
   ]);
+  prefs = UsageShared.mergePrefs(stored.prefs);
+  for (const b of document.querySelectorAll("#view-toggle button")) b.setAttribute("aria-pressed", String(b.dataset.view === prefs.view));
+  const { latestUsage, usageHistory = [], usageError, queries = [], diag = {} } = stored;
   renderLimits(latestUsage, usageHistory, usageError);
   renderStatus(diag, usageError, latestUsage);
   renderStats(queries);
+  renderTopChats(queries);
   renderQueries(queries, latestUsage);
 }
 
@@ -321,6 +434,11 @@ async function exportJSON() {
 }
 
 $("refresh").addEventListener("click", refresh);
+const openDashboard = (hash = "") => chrome.tabs.create({ url: chrome.runtime.getURL(`dashboard/dashboard.html${hash}`) });
+$("open-dashboard").addEventListener("click", () => openDashboard());
+$("all-chats").addEventListener("click", (e) => (e.preventDefault(), openDashboard("#chats")));
+$("open-settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
+for (const b of document.querySelectorAll("#view-toggle button")) b.addEventListener("click", () => setView(b.dataset.view));
 $("copy-diag").addEventListener("click", async () => {
   const { diag = {}, usageError, latestUsage, queries = [] } = await chrome.storage.local.get(["diag", "usageError", "latestUsage", "queries"]);
   const report = {

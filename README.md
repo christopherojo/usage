@@ -6,7 +6,14 @@ A Chrome extension (Manifest V3) that shows, right from the toolbar:
   (from the same endpoint ChatGPT's Codex usage page reads).
 - **Per-query cost**: estimated tokens for your prompt, the conversation context re-sent with it,
   the reply, the reasoning summary and tool calls, plus how much each query moved your limit %.
-- **Activity**: messages and estimated tokens over the last 5h / 7d, and per-model counts.
+- **Burn-rate forecast**: "at this pace you run out ~3:40 PM", an even-pace marker on each bar,
+  and a dashed projection to reset on the graph.
+- **Used / Left toggle** and colour levels (green, yellow, orange, red) by % left. Thresholds can be changed in Settings.
+- **Cost per conversation**: the costliest chats in the popup, plus a full sortable table in the dashboard
+  that flags long chats where each message re-sends a lot of history.
+- **Dashboard**: daily or weekly charts of tokens, messages or limit % used, and a model comparison.
+- **On-page pill** on chatgpt.com that you can click to expand and drag anywhere.
+- **Settings**: default view, colour thresholds, refresh interval, and pill on/off, position and window.
 
 No extra login, API key or server. It runs inside your signed-in chatgpt.com tab and stores
 everything in `chrome.storage.local` on your machine. Message text is tokenized and then discarded;
@@ -32,7 +39,12 @@ The badge shows your 5-hour usage % (green / orange ≥70 / red ≥90).
 | `extension/inject.js` | Runs in the page's own JS world. Wraps `fetch` to *observe* ChatGPT's requests: sending a message (`POST /backend-api/conversation`), starting a Codex task (`POST /backend-api/wham/tasks`), and usage reads (`GET /backend-api/wham/usage`). |
 | `extension/content.js` | Snapshots usage before and after each query, fetches the finished conversation to split prompt / context / reply / reasoning / tool text, and polls usage every 5 minutes while the tab is visible. |
 | `extension/background.js` | Counts tokens (o200k_base, the GPT-4o/GPT-5 tokenizer), stores history, sets the badge. |
-| `extension/popup/` | The dashboard, with CSV / JSON export. |
+| `extension/popup/` | Toolbar popup: limits, forecast, top chats, recent queries, CSV / JSON export. |
+| `extension/dashboard/` | Full-page charts, cost per conversation, model comparison. |
+| `extension/options/` | Settings page. |
+| `extension/pill.js` | Floating usage pill on chatgpt.com (Shadow DOM, reads from storage only). |
+| `extension/lib/shared.js` | Settings defaults, colour levels, formatting, conversation aggregation. |
+| `extension/lib/forecast.js` | Burn-rate maths. Tests: `node test/forecast.test.js` |
 
 ## Accuracy caveats
 

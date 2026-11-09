@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ChatGPT Usage · Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>ChatGPT Usage</h1>
+    <div class="controls">
+      <label>Range
+        <select id="range">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="0">All time</option>
+        </select>
+      </label>
+      <a class="btn" id="settings" href="#">Settings</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="usage">
+      <div class="card-head">
+        <h2>Usage over time</h2>
+        <div class="controls">
+          <div class="seg" id="metric" role="group" aria-label="Metric">
+            <button data-v="tokens" aria-pressed="true">Tokens</button>
+            <button data-v="messages" aria-pressed="false">Messages</button>
+            <button data-v="limit" aria-pressed="false">Limit used</button>
+          </div>
+          <select id="limit-key" hidden></select>
+          <div class="seg" id="group" role="group" aria-label="Group by">
+            <button data-v="day" aria-pressed="true">Daily</button>
+            <button data-v="week" aria-pressed="false">Weekly</button>
+          </div>
+        </div>
+      </div>
+      <div class="summary" id="summary"></div>
+      <div class="chart-wrap">
+        <svg id="chart" viewBox="0 0 900 260" preserveAspectRatio="none" role="img" aria-label="Usage chart"></svg>
+        <div id="readout" class="readout" hidden></div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <p class="hint" id="chart-hint"></p>
+    </section>
+
+    <section class="card" id="chats">
+      <div class="card-head">
+        <h2>Cost per conversation</h2>
+        <input id="chat-search" type="search" placeholder="Filter by title or model…" />
+      </div>
+      <p class="hint">Each message re-sends the earlier conversation as context, so long chats get more expensive per message. "Context now" is roughly what the next message would re-send.</p>
+      <div class="table-wrap">
+        <table id="chat-table">
+          <thead>
+            <tr>
+              <th data-k="title">Chat</th>
+              <th data-k="messages" class="num">Msgs</th>
+              <th data-k="tokens" class="num">~Tokens</th>
+              <th data-k="perMsg" class="num">~Per msg</th>
+              <th data-k="lastContext" class="num">Context now</th>
+              <th data-k="limit" class="num">Limit used</th>
+              <th data-k="models">Models</th>
+              <th data-k="lastTs" class="num">Last active</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="models">
+      <div class="card-head"><h2>Models compared</h2></div>
+      <div class="table-wrap">
+        <table id="model-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th class="num">Msgs</th>
+              <th class="num">Share of tokens</th>
+              <th class="num">Avg prompt+ctx</th>
+              <th class="num">Avg reply</th>
+              <th class="num">Avg thinking</th>
+              <th class="num">Avg limit / msg</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="../lib/shared.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

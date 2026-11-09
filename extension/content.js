@@ -362,8 +362,22 @@
     }
   });
 
+  // Poll on the interval from Settings (default 5 min) while the tab is visible.
+  let pollTimer = null;
+  function schedulePoll(minutes) {
+    clearInterval(pollTimer);
+    const ms = Math.max(1, Number(minutes) || POLL_MS / 60000) * 60000;
+    pollTimer = setInterval(() => {
+      if (document.visibilityState === "visible") fetchUsage();
+    }, ms);
+  }
+  UsageShared.loadPrefs().then((p) => schedulePoll(p.pollMinutes));
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area === "local" && c.prefs && c.prefs.newValue) schedulePoll(c.prefs.newValue.pollMinutes);
+  });
+  document.addEventListener("visibilitychange", () => {
+    // Catch up when you come back to the tab after a while.
+    if (document.visibilityState === "visible" && (!latest || Date.now() - latest.ts > 60000)) fetchUsage();
+  });
   setTimeout(fetchUsage, 3000);
-  setInterval(() => {
-    if (document.visibilityState === "visible") fetchUsage();
-  }, POLL_MS);
 })();
